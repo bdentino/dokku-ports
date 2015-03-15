@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 #
 # Reads PORTS file and outputs -p $PORT for each private port listed there.
+STDIN=$(cat)
 APP=$1
 PORTS="$DOKKU_ROOT/$APP/PORTS"
+
+output=""
 if [[ -f "$PORTS" ]] ; then
-  exec < "$PORTS"
-  while read LINE ; do
-    if [[ "$LINE" =~ [0-9]+: ]] ; then
-      PUBLIC_PORT=${LINE%:*}
-      PRIVATE_PORT=${LINE#*:}
-      echo -n "-p $PRIVATE_PORT "
+  DONE=false
+  until $DONE ; do
+    read line || DONE=true
+    if [[ "$line" =~ [0-9]+: ]] ; then
+      PUBLIC_PORT=${line%:*}
+      PRIVATE_PORT=${line#*:}
+      output="$output -p $PRIVATE_PORT "
     fi
-  done
+  done < $PORTS
 fi
+
+echo "$STDIN $output"
