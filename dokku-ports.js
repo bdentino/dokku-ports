@@ -50,25 +50,36 @@ function listen(publicPort) {
 // Called to (re-)bind public port to private port.
 function bindPorts(publicPort, privatePort, appPath) {
   // Need to find the container port associated with that app's private port
-  var containerID = File.readFileSync( Path.join(appPath, 'CONTAINER'), 'utf-8').trim();
-  var args        = ['port', containerID, privatePort];
-  execFile('docker', args, function(error, stdout, stderr) {
-    if (error) {
-      console.error(stderr);
-      return;
-    }
+  var containerFiles = File.readdirSync(appPath)
+                           .filter(function(name) { return name.indexOf('CONTAINER') == 0 })
 
-    if (!publicToContainer[publicPort]) {
-      // First time binding public port, start listening
-      listen(publicPort);
-    }
 
-    // Output of docker port commans looks like: 0.0.0.0:49166
-    var containerPort = stdout.trim().split(':')[1];
-    publicToContainer[publicPort] = containerPort;
-    console.log(publicPort, '->', containerPort, '->', privatePort, 'for', Path.basename(appPath));
+  var containerIDs = containerFiles.map(function(file) {
+    return File.readFileSync(Path.join(appPath, file), 'utf-8').trim();
+  })
 
-  });
+  containerIDs.forEach(function(containerID) {
+    var args        = ['port', containerID, privatePort];
+    execFile('docker', args, function(error, stdout, stderr) {
+      if (stderr.indexOf('No public port') >= 0) return
+
+      if (error) {
+        console.error(stderr);
+        return;
+      }
+
+      if (!publicToContainer[publicPort]) {
+        // First time binding public port, start listening
+        listen(publicPort);
+      }
+
+      // Output of docker port commands looks like: 0.0.0.0:49166
+      var containerPort = stdout.trim().split(':')[1];
+      publicToContainer[publicPort] = containerPort;
+      console.log(publicPort, '->', containerPort, '->', privatePort, 'for', Path.basename(appPath));
+
+    });
+  })
 }
 
 
@@ -79,7 +90,7 @@ function reloadPorts(portsFile) {
       console.error(error);
       return;
     }
-    
+
     ports.split(/\n/)
       .filter(function(line) {
         return line.length;
@@ -103,7 +114,7 @@ function reload() {
       console.error(error);
       return;
     }
-    
+
     filenames
       .map(function(app) {
         return Path.join(dokkuRoot, app, 'PORTS');
@@ -123,4 +134,3 @@ reload();
 // Wait forever.  This is required if PORTS are empty and we're not listening on
 // any port.
 setInterval(Function, 5000);
-
